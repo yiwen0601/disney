@@ -12,8 +12,9 @@ def process_data():
     """处理数据并保存"""
     # 设置路径
     project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    data_path = os.path.join(project_dir, 'data', 'disney_attendance.csv')
-    output_path = os.path.join(project_dir, 'data', 'disney_attendance_cleaned.csv')
+    data_path = os.path.join(project_dir, 'data', 'raw', 'disney_attendance.csv')
+    output_path = os.path.join(project_dir, 'data', 'processed', 'disney_attendance_cleaned.csv')
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     # 加载数据
     print("加载数据...")

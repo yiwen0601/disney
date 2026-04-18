@@ -17,6 +17,9 @@ import pandas as pd
 from flask import Flask, jsonify, render_template, request
 
 BASE_DIR = Path(__file__).resolve().parent
+RAW_DATA_DIR = BASE_DIR / "data" / "raw"
+PROCESSED_DATA_DIR = BASE_DIR / "data" / "processed"
+MODEL_DIR = BASE_DIR / "models"
 DEFAULT_MODELSCOPE_ACCESS_TOKEN = "ms-78a67a75-3b81-4796-b244-92ab0cf0b09c"
 DEFAULT_MODELSCOPE_BASE_URL = "https://api-inference.modelscope.cn/v1/"
 DEFAULT_MODELSCOPE_MODEL = "ZhipuAI/GLM-5.1"
@@ -32,13 +35,13 @@ AMAP_WEATHER_URL = "https://restapi.amap.com/v3/weather/weatherInfo"
 app = Flask(__name__)
 
 # 加载模型
-model_data = joblib.load(BASE_DIR / "disney_attendance_model.joblib")
+model_data = joblib.load(MODEL_DIR / "disney_attendance_model.joblib")
 model = model_data["model"]
 scaler = model_data["scaler"]
 feature_columns = list(model_data["feature_columns"])
 
 # 加载历史数据
-historical_df = pd.read_csv(BASE_DIR / "shanghai_disney_featured.csv")
+historical_df = pd.read_csv(PROCESSED_DATA_DIR / "shanghai_disney_featured.csv")
 historical_df["date"] = pd.to_datetime(historical_df["date"])
 historical_df["date_key"] = historical_df["date"].dt.date
 historical_df = historical_df.sort_values("date").reset_index(drop=True)

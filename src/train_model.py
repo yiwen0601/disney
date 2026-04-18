@@ -182,7 +182,7 @@ def main():
     """主函数"""
     # 设置路径
     project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    data_path = os.path.join(project_dir, 'data', 'disney_attendance_cleaned.csv')
+    data_path = os.path.join(project_dir, 'data', 'processed', 'disney_attendance_cleaned.csv')
     model_dir = os.path.join(project_dir, 'models')
     
     # 加载数据
@@ -243,7 +243,7 @@ def main():
     
     # 保存评估结果
     results_df = pd.DataFrame(results).T
-    results_path = os.path.join(project_dir, 'data', 'model_comparison.csv')
+    results_path = os.path.join(project_dir, 'data', 'processed', 'model_comparison.csv')
     results_df.to_csv(results_path)
     print(f"\n模型对比结果已保存到: {results_path}")
     

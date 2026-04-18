@@ -223,7 +223,7 @@ def main():
     df = generate_disney_attendance_data()
     
     # 保存数据
-    output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+    output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'raw')
     os.makedirs(output_dir, exist_ok=True)
     
     output_path = os.path.join(output_dir, 'disney_attendance.csv')

@@ -42,8 +42,9 @@
 
 ### 数据文件
 
-- `shanghai_disney_attendance.csv`：基础客流数据，共 3653 行、22 列
-- `shanghai_disney_featured.csv`：特征工程后的训练数据，共 3653 行、35 列
+- `data/raw/shanghai_disney_attendance.csv`：基础客流数据，共 3653 行、22 列
+- `data/processed/shanghai_disney_featured.csv`：特征工程后的训练数据，共 3653 行、35 列
+- `data/processed/train_data.csv`、`data/processed/test_data.csv`：训练集与测试集切分结果
 - 数据时间范围：`2016-01-01` 至 `2025-12-31`
 
 ### 关键字段
@@ -74,7 +75,7 @@
 ### 模型训练
 
 - 比较线性回归、Ridge、Lasso、随机森林、梯度提升等方法
-- 当前部署模型保存在 `disney_attendance_model.joblib`
+- 当前部署模型保存在 `models/disney_attendance_model.joblib`
 - 模型对象包含 `model`、`scaler`、`feature_columns` 和 `metrics`
 
 ### 产品化输出
@@ -100,6 +101,11 @@
 - `01_data_collection_executed.ipynb`
 - `02_data_analysis_executed.ipynb`
 - `03_model_training.ipynb`
+
+说明：
+已执行版本主要用于展示结果快照；如果需要按当前目录结构重新运行，请优先使用未执行的源码版本。
+
+图表输出统一保存在 `images/` 目录，数据产物统一保存在 `data/raw/` 与 `data/processed/` 目录。
 
 ## 核心发现
 
@@ -191,20 +197,32 @@ disney/
 ├── app.py
 ├── templates/
 │   └── index.html
+├── images/
+│   ├── attendance_analysis.png
+│   ├── eda_holiday_impact.png
+│   ├── model_comparison.png
+│   └── ...
+├── models/
+│   └── disney_attendance_model.joblib
 ├── src/
 │   ├── app.py
 │   ├── generate_data.py
 │   ├── process_data.py
 │   └── train_model.py
 ├── data/
-│   ├── disney_attendance.csv
-│   └── disney_attendance_cleaned.csv
+│   ├── raw/
+│   │   ├── disney_attendance.csv
+│   │   └── shanghai_disney_attendance.csv
+│   └── processed/
+│       ├── disney_attendance_cleaned.csv
+│       ├── shanghai_disney_featured.csv
+│       ├── train_data.csv
+│       └── test_data.csv
 ├── 01_data_collection.ipynb
 ├── 02_data_analysis.ipynb
 ├── 03_model_training.ipynb
-├── shanghai_disney_attendance.csv
-├── shanghai_disney_featured.csv
-├── disney_attendance_model.joblib
+├── notebooks/
+│   └── data_analysis.ipynb
 ├── requirements.txt
 ├── REFLECTION.md
 └── SUBMISSION_CHECKLIST.md
