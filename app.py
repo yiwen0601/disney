@@ -20,14 +20,19 @@ BASE_DIR = Path(__file__).resolve().parent
 RAW_DATA_DIR = BASE_DIR / "data" / "raw"
 PROCESSED_DATA_DIR = BASE_DIR / "data" / "processed"
 MODEL_DIR = BASE_DIR / "models"
-DEFAULT_MODELSCOPE_ACCESS_TOKEN = "ms-78a67a75-3b81-4796-b244-92ab0cf0b09c"
-DEFAULT_MODELSCOPE_BASE_URL = "https://api-inference.modelscope.cn/v1/"
-DEFAULT_MODELSCOPE_MODEL = "ZhipuAI/GLM-5.1"
+DEFAULT_MODELSCOPE_ACCESS_TOKEN = "sk-5923f50b586b49b9b08335dd9ee9fa52"
+DEFAULT_MODELSCOPE_BASE_URL = "https://matrixllm.alipay.com/v1"
+DEFAULT_MODELSCOPE_MODEL = "claude-sonnet-4-5-20250929"
 DEFAULT_MODELSCOPE_FALLBACK_MODELS = (
-    "MiniMax/MiniMax-M2.7",
-    "moonshotai/Kimi-K2.5",
     "Qwen/Qwen3.5-35B-A3B",
+    "ZhipuAI/GLM-5.1",
+    "MiniMax/MiniMax-M2.7",
 )
+DEFAULT_AI_MODEL_TIMEOUT_SECONDS = float(os.getenv("MODELSCOPE_MODEL_TIMEOUT_SECONDS", "10"))
+DEFAULT_AI_MODEL_MAX_ATTEMPTS = int(os.getenv("MODELSCOPE_MODEL_MAX_ATTEMPTS", "1"))
+DEFAULT_AI_OVERVIEW_MAX_TOKENS = int(os.getenv("MODELSCOPE_OVERVIEW_MAX_TOKENS", "1200"))
+DEFAULT_AI_DAILY_MAX_TOKENS = int(os.getenv("MODELSCOPE_DAILY_MAX_TOKENS", "900"))
+DEFAULT_AI_DAILY_CHUNK_SIZE = int(os.getenv("MODELSCOPE_DAILY_CHUNK_SIZE", "7"))
 DEFAULT_AMAP_WEATHER_KEY = "04c837fddf6db740b94f04853ed9d266"
 DEFAULT_AMAP_CITY_CODE = "310000"
 AMAP_WEATHER_URL = "https://restapi.amap.com/v3/weather/weatherInfo"
@@ -70,31 +75,47 @@ SEASON_ENCODING = (
     .to_dict()
 )
 
-WEEKDAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 HOLIDAY_NAME_MAP = {
-    "new_year": "元旦",
-    "spring_festival": "春节",
-    "qingming": "清明假期",
-    "labor_day": "劳动节",
-    "dragon_boat": "端午节",
-    "mid_autumn": "中秋节",
-    "national_day": "国庆黄金周",
+    "new_year": "New Year's Day",
+    "spring_festival": "Spring Festival",
+    "qingming": "Qingming Festival",
+    "labor_day": "Labor Day Holiday",
+    "dragon_boat": "Dragon Boat Festival",
+    "mid_autumn": "Mid-Autumn Festival",
+    "national_day": "National Day Golden Week",
 }
 HOLIDAY_RULES = {
-    "元旦": {"start": (1, 1), "duration": 3, "multiplier": 1.30},
-    "春节": {"start": (2, 10), "duration": 7, "multiplier": 1.85},
-    "清明假期": {"start": (4, 4), "duration": 3, "multiplier": 1.35},
-    "劳动节": {"start": (5, 1), "duration": 5, "multiplier": 1.65},
-    "端午节": {"start": (6, 10), "duration": 3, "multiplier": 1.30},
-    "中秋节": {"start": (9, 15), "duration": 3, "multiplier": 1.32},
-    "国庆黄金周": {"start": (10, 1), "duration": 7, "multiplier": 1.95},
+    "New Year's Day": {"start": (1, 1), "duration": 3, "multiplier": 1.30},
+    "Spring Festival": {"start": (2, 10), "duration": 7, "multiplier": 1.85},
+    "Qingming Festival": {"start": (4, 4), "duration": 3, "multiplier": 1.35},
+    "Labor Day Holiday": {"start": (5, 1), "duration": 5, "multiplier": 1.65},
+    "Dragon Boat Festival": {"start": (6, 10), "duration": 3, "multiplier": 1.30},
+    "Mid-Autumn Festival": {"start": (9, 15), "duration": 3, "multiplier": 1.32},
+    "National Day Golden Week": {"start": (10, 1), "duration": 7, "multiplier": 1.95},
 }
 SPECIAL_EVENTS = [
-    {"name": "冬季节庆季", "start": (12, 15), "end": (1, 7)},
-    {"name": "春日主题季", "start": (3, 15), "end": (5, 5)},
-    {"name": "夏日庆典季", "start": (6, 20), "end": (8, 31)},
-    {"name": "万圣狂欢季", "start": (10, 1), "end": (10, 31)},
+    {"name": "Winter Celebration Season", "start": (12, 15), "end": (1, 7)},
+    {"name": "Spring Festival Season", "start": (3, 15), "end": (5, 5)},
+    {"name": "Summer Celebration Season", "start": (6, 20), "end": (8, 31)},
+    {"name": "Halloween Season", "start": (10, 1), "end": (10, 31)},
 ]
+AMAP_WEATHER_TERM_MAP = {
+    "特大暴雨": "extreme rainstorm",
+    "大暴雨": "severe rainstorm",
+    "暴雨": "rainstorm",
+    "大雨": "heavy rain",
+    "中雨": "moderate rain",
+    "小雨": "light rain",
+    "雷阵雨": "thunderstorms",
+    "阵雨": "showers",
+    "雨夹雪": "sleet",
+    "多云": "cloudy",
+    "阴": "overcast",
+    "晴": "sunny",
+    "雪": "snow",
+}
 
 
 class AIInsightError(RuntimeError):
@@ -138,10 +159,10 @@ def get_amap_city_code():
     return os.getenv("AMAP_CITY_CODE", DEFAULT_AMAP_CITY_CODE).strip()
 
 
-def to_cn_date_label(date_str):
-    """把 ISO 日期转成更适合中文生成的日期标签"""
+def to_display_date_label(date_str):
+    """Convert an ISO date into an English date label."""
     parsed = datetime.strptime(date_str, "%Y-%m-%d")
-    return f"{parsed.month}月{parsed.day}日"
+    return f"{MONTH_ABBR[parsed.month - 1]} {parsed.day}"
 
 
 def to_percent_label(value):
@@ -152,22 +173,34 @@ def to_percent_label(value):
 def get_rain_risk_label(probability):
     """把降雨概率映射成更自然的风险描述"""
     if probability >= 0.6:
-        return "降雨风险高"
+        return "High rain risk"
     if probability >= 0.45:
-        return "降雨风险较高"
+        return "Elevated rain risk"
     if probability >= 0.3:
-        return "有一定降雨风险"
-    return "降雨风险较低"
+        return "Some rain risk"
+    return "Low rain risk"
 
 
 def get_park_hours_label(park_hours):
     """把营业时段转成更适合自然语言生成的标签"""
     open_time, close_time = park_hours.split("-")
     if open_time <= "08:00" and close_time >= "22:00":
-        return "早开园且晚间延时运营"
+        return "Early opening and extended evening hours"
     if close_time >= "21:30":
-        return "晚间延时运营"
-    return "常规运营时段"
+        return "Extended evening hours"
+    return "Standard operating hours"
+
+
+def translate_weather_text(text):
+    """Translate Amap weather descriptions into English for display."""
+    translated = (text or "").strip()
+    if not translated:
+        return ""
+
+    for chinese, english in AMAP_WEATHER_TERM_MAP.items():
+        translated = translated.replace(chinese, english)
+    translated = translated.replace("转", " to ")
+    return translated or "Unknown"
 
 
 def infer_rain_probability(dayweather, nightweather):
@@ -196,16 +229,18 @@ def infer_rain_probability(dayweather, nightweather):
 
 def build_amap_weather_label(dayweather, nightweather):
     """把白天/夜间天气转成自然标签"""
-    if dayweather and nightweather and dayweather != nightweather:
-        return f"{dayweather}转{nightweather}"
-    return dayweather or nightweather or "未知"
+    day_label = translate_weather_text(dayweather)
+    night_label = translate_weather_text(nightweather)
+    if day_label and night_label and day_label != night_label:
+        return f"{day_label} to {night_label}"
+    return day_label or night_label or "Unknown"
 
 
 def fetch_amap_weather_forecast(city_code=None):
     """获取高德未来天气预报，默认上海"""
     api_key = get_amap_weather_key()
     if not api_key:
-        raise WeatherAPIError("未配置可用的高德天气 Key。")
+        raise WeatherAPIError("No valid Amap weather API key is configured.")
 
     params = {
         "city": city_code or get_amap_city_code(),
@@ -219,14 +254,14 @@ def fetch_amap_weather_forecast(city_code=None):
         with urlopen(request_url, timeout=8) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except Exception as exc:
-        raise WeatherAPIError("高德天气接口请求失败。") from exc
+        raise WeatherAPIError("The Amap weather request failed.") from exc
 
     if payload.get("status") != "1":
-        raise WeatherAPIError(payload.get("info") or "高德天气接口返回失败。")
+        raise WeatherAPIError("The Amap weather service returned an error.")
 
     forecasts = payload.get("forecasts") or []
     if not forecasts:
-        raise WeatherAPIError("高德天气接口未返回预报数据。")
+        raise WeatherAPIError("The Amap weather service returned no forecast data.")
 
     forecast = forecasts[0]
     weather_by_date = {}
@@ -247,12 +282,12 @@ def fetch_amap_weather_forecast(city_code=None):
             "rain_probability": round(rain_probability, 2),
             "is_rainy": rain_probability >= 0.52,
             "weather_label": build_amap_weather_label(dayweather, nightweather),
-            "comfort_label": "基于高德天气预报",
+            "comfort_label": "Based on the latest Amap forecast",
             "risk_level": "medium" if rain_probability >= 0.45 else "low",
-            "weather_day": dayweather,
-            "weather_night": nightweather,
+            "weather_day": translate_weather_text(dayweather),
+            "weather_night": translate_weather_text(nightweather),
             "reporttime": forecast.get("reporttime"),
-            "city": forecast.get("city"),
+            "city": "Shanghai",
             "province": forecast.get("province"),
             "adcode": forecast.get("adcode"),
             "source": "amap",
@@ -362,24 +397,24 @@ def estimate_weather(day_value, amap_weather_by_date=None):
     is_rainy = rain_probability >= 0.52
 
     if temperature >= 33 and rain_probability >= 0.45:
-        weather_label = "高温伴阵雨"
-        comfort_label = "体感压力高"
+        weather_label = "Hot with scattered showers"
+        comfort_label = "Higher thermal stress"
         risk_level = "high"
     elif temperature >= 32:
-        weather_label = "闷热"
-        comfort_label = "中午体感偏热"
+        weather_label = "Hot and humid"
+        comfort_label = "Warmer conditions around midday"
         risk_level = "medium"
     elif rain_probability >= 0.55:
-        weather_label = "阵雨频发"
-        comfort_label = "需关注室内项目拥挤"
+        weather_label = "Frequent showers"
+        comfort_label = "Indoor attractions may become more crowded"
         risk_level = "medium"
     elif temperature <= 8:
-        weather_label = "湿冷"
-        comfort_label = "早晚体感偏冷"
+        weather_label = "Cold and damp"
+        comfort_label = "Cooler mornings and evenings"
         risk_level = "low"
     else:
-        weather_label = "舒适"
-        comfort_label = "整体游玩体感较好"
+        weather_label = "Comfortable"
+        comfort_label = "Generally pleasant park conditions"
         risk_level = "low"
 
     return {
@@ -418,12 +453,12 @@ def get_lag_features(day_value, attendance_lookup):
 def get_crowd_profile(prediction):
     """根据历史分位数返回拥挤级别"""
     if prediction < ATTENDANCE_Q35:
-        return {"label": "轻松", "key": "relaxed", "signal": "低压运营"}
+        return {"label": "Relaxed", "key": "relaxed", "signal": "Low-pressure operations"}
     if prediction < ATTENDANCE_Q60:
-        return {"label": "适中", "key": "steady", "signal": "常规运营"}
+        return {"label": "Moderate", "key": "steady", "signal": "Standard operations"}
     if prediction < ATTENDANCE_Q82:
-        return {"label": "繁忙", "key": "busy", "signal": "高峰排班"}
-    return {"label": "高压", "key": "peak", "signal": "峰值预警"}
+        return {"label": "Busy", "key": "busy", "signal": "Peak staffing"}
+    return {"label": "Peak", "key": "peak", "signal": "Peak alert"}
 
 
 def estimate_park_hours(day_value, is_holiday, special_event_name, crowd_key):
@@ -474,50 +509,50 @@ def build_day_note(day_result):
     """生成单日业务描述"""
     fragments = []
     if day_result["is_holiday"]:
-        fragments.append(f"{day_result['holiday_name']}带动客流上扬")
+        fragments.append(f"{day_result['holiday_name']} is likely to lift demand")
     elif day_result["is_weekend"]:
-        fragments.append("周末效应会放大头部项目排队")
+        fragments.append("Weekend traffic is likely to intensify queues at headline attractions")
 
     if day_result["special_event_name"]:
-        fragments.append(f"{day_result['special_event_name']}提升下午和晚间客流黏性")
+        fragments.append(f"{day_result['special_event_name']} should support stronger afternoon and evening traffic")
 
     if day_result["weather"]["rain_probability"] >= 0.55:
-        fragments.append("雨天风险会把需求集中到室内项目")
+        fragments.append("Rain risk may shift demand toward indoor attractions")
     elif day_result["weather"]["temperature_c"] >= 32:
-        fragments.append("高温会抬升午间补水和遮阴区压力")
+        fragments.append("Hot weather is likely to raise pressure on hydration and shaded rest areas")
 
     if day_result["demand_delta_pct"] >= 12:
-        fragments.append("预计明显高于历史同类日期")
+        fragments.append("Expected demand is materially above the historical baseline")
     elif day_result["demand_delta_pct"] <= -8:
-        fragments.append("低于历史同类日期，适合做体验优化")
+        fragments.append("Demand is below comparable historical days, creating room for experience optimization")
 
-    return "；".join(fragments[:3]) if fragments else "预计需求平稳，适合按照常规节奏组织游玩与运营资源。"
+    return "; ".join(fragments[:3]) if fragments else "Demand looks stable and supports a standard operations rhythm."
 
 
 def build_ops_focus(day_result):
     """生成单日运营动作"""
     if day_result["crowd_level_en"] == "peak":
-        return "建议在安检、检票口与热门项目入口配置弹性人手，并前置餐饮补货。"
+        return "Add flexible staffing at security, ticket entry, and top attraction entrances, and pre-position food replenishment."
     if day_result["weather"]["rain_probability"] >= 0.55:
-        return "建议提前准备雨具售卖与室内排队疏导方案，避免动线拥堵。"
+        return "Prepare rain gear sales and indoor queue guidance in advance to reduce local bottlenecks."
     if day_result["weather"]["temperature_c"] >= 32:
-        return "建议加密补水点巡检与遮阳休息区引导，缓解中午热应激。"
+        return "Increase checks at hydration points and guide guests toward shaded rest areas around midday."
     if day_result["crowd_level_en"] == "busy":
-        return "建议把高峰运力集中在开园后两小时和晚间演出前。"
-    return "可按常规排班运行，并用低峰时段承接会员转化和二次消费。"
+        return "Concentrate peak operating capacity in the first two hours after opening and before evening shows."
+    return "A standard staffing plan should be sufficient, with quieter hours used for membership conversion and secondary spend."
 
 
 def build_visitor_tip(day_result):
     """生成单日游客建议"""
     if day_result["crowd_level_en"] == "peak":
-        return "建议开园前 45 分钟到达，优先处理头部项目和热门预约。"
+        return "Arrive about 45 minutes before opening and prioritize headline attractions and reservations."
     if day_result["weather"]["rain_probability"] >= 0.55:
-        return "建议带轻便雨衣，先排室外项目，再转入室内馆。"
+        return "Bring a lightweight rain poncho, do outdoor rides first, and shift indoors later."
     if day_result["weather"]["temperature_c"] >= 32:
-        return "建议上午冲热门项目，中午转室内演出和餐饮，避免连续暴晒。"
+        return "Target major rides in the morning, then move to indoor shows and dining around midday."
     if day_result["crowd_level_en"] == "relaxed":
-        return "适合用来补漏项目、拍照打卡和安排更从容的餐饮节奏。"
-    return "建议开园后尽早完成前两项重点项目，下午按体力灵活调整。"
+        return "This is a good day for lower-priority rides, photo stops, and a more relaxed dining pace."
+    return "Finish your top two priorities early, then adjust the afternoon plan based on energy levels."
 
 
 def predict_single_day(day_value, attendance_lookup=None, amap_weather_by_date=None):
@@ -615,23 +650,23 @@ def build_key_drivers(day_results, baseline_delta_pct):
 
     drivers = []
     if holiday_days:
-        drivers.append(f"{holiday_days} 天法定节假日将显著抬高入园需求和晚间停留时长。")
+        drivers.append(f"{holiday_days} public holiday days are likely to raise park entry demand and evening dwell time.")
     if weekend_days >= max(1, len(day_results) // 2):
-        drivers.append("周末占比较高，头部项目与餐饮高峰将更集中。")
+        drivers.append("A high weekend share should concentrate demand around headline attractions and dining peaks.")
     if school_break_days:
-        drivers.append("学校假期窗口会增强家庭客群占比，午后与傍晚客流更具黏性。")
+        drivers.append("School break timing is likely to increase the family segment and keep traffic elevated into the evening.")
     if special_event_days:
-        drivers.append("季节性主题活动会提升晚场表演、园区零售与餐饮的需求密度。")
+        drivers.append("Seasonal events should support stronger demand for evening shows, retail, and food and beverage.")
     if avg_temp >= 31:
-        drivers.append("高温天气会放大遮阴、补水和室内项目承接压力。")
+        drivers.append("Higher temperatures are likely to increase pressure on shaded zones, hydration points, and indoor capacity.")
     if avg_rain_probability >= 0.48:
-        drivers.append("阵雨风险可能抑制部分临时客流，但会让室内项目排队更集中。")
+        drivers.append("Shower risk may soften some spontaneous visits while concentrating queues inside indoor attractions.")
     if baseline_delta_pct >= 10:
-        drivers.append("整体需求高于历史同类日期，需按高峰运营节奏组织资源。")
+        drivers.append("Overall demand is above comparable historical dates and should be managed with a peak-style operating rhythm.")
     elif baseline_delta_pct <= -8:
-        drivers.append("整体需求低于历史同类日期，适合利用低峰窗口做体验优化与转化。")
+        drivers.append("Overall demand is below comparable historical dates, creating room for experience upgrades and conversion activity.")
 
-    return drivers[:4] if drivers else ["整体需求结构较平稳，主要受周内节奏与常规天气因素驱动。"]
+    return drivers[:4] if drivers else ["Demand looks relatively stable, driven mainly by the weekday mix and normal weather conditions."]
 
 
 def build_operational_recommendations(day_results, overview):
@@ -641,18 +676,18 @@ def build_operational_recommendations(day_results, overview):
     avg_rain_probability = mean(item["weather"]["rain_probability"] for item in day_results)
 
     if overview["peak_days"] > 0:
-        recommendations.append("在高压日的 09:00-11:30 与 16:30-19:30 加强安检、检票口和热门项目入口排班。")
+        recommendations.append("Add extra staffing at security, ticket entry, and top attraction gates from 09:00-11:30 and 16:30-19:30 on peak days.")
     if overview["busy_days"] >= 2:
-        recommendations.append("提前锁定餐饮补货节奏，把高需求资源向头部项目周边与晚场核心动线倾斜。")
+        recommendations.append("Lock in food replenishment timing early and shift high-demand resources toward headline attractions and evening traffic corridors.")
     if avg_rain_probability >= 0.48:
-        recommendations.append("准备雨具售卖、室内项目导流和巡游变更预案，降低天气导致的局部拥堵。")
+        recommendations.append("Prepare rain gear sales, indoor re-routing, and parade contingency plans to reduce weather-driven congestion.")
     if avg_temp >= 31:
-        recommendations.append("增加补水点巡检与遮阴区引导，必要时强化中午时段的休息区服务。")
+        recommendations.append("Increase checks at hydration points and add clearer guidance to shaded rest zones around midday.")
     if overview["baseline_delta_pct"] <= -8:
-        recommendations.append("可利用相对低峰窗口推进会员活动、套餐转化和园区体验细节优化。")
+        recommendations.append("Use lower-pressure windows for membership campaigns, bundled offers, and guest experience refinements.")
 
     if not recommendations:
-        recommendations.append("按常规周内运营节奏配置资源即可，重点关注午后餐饮与晚间演出前后的客流波动。")
+        recommendations.append("A standard weekday operating plan should be sufficient, with extra attention on afternoon dining and pre-show traffic swings.")
 
     return recommendations[:4]
 
@@ -664,17 +699,17 @@ def build_visitor_recommendations(day_results, overview):
     avg_rain_probability = mean(item["weather"]["rain_probability"] for item in day_results)
 
     if overview["peak_days"] > 0 or overview["busy_days"] >= 2:
-        recommendations.append("建议至少提前 30-45 分钟抵达，优先完成最在意的头部项目。")
+        recommendations.append("Arrive at least 30-45 minutes early and complete your highest-priority attractions first.")
     if avg_rain_probability >= 0.48:
-        recommendations.append("建议携带轻便雨衣，先安排室外项目，再把室内项目放到午后或阵雨时段。")
+        recommendations.append("Bring a lightweight rain poncho and schedule outdoor attractions before moving indoors later in the day.")
     if avg_temp >= 31:
-        recommendations.append("建议上午冲热门项目，中午转向室内演出、餐饮和休息区，避免高温暴晒。")
+        recommendations.append("Target major rides in the morning, then switch to indoor shows, dining, and rest areas around midday.")
     if overview["best_visit_days"]:
-        best_days = "、".join(day["date"] for day in overview["best_visit_days"])
-        recommendations.append(f"若行程可调，{best_days} 更适合安排拍照、补漏项目和轻松节奏。")
+        best_days = ", ".join(day["date"] for day in overview["best_visit_days"])
+        recommendations.append(f"If your schedule is flexible, {best_days} should be better for photo stops, catch-up rides, and a lighter pace.")
 
     if not recommendations:
-        recommendations.append("整体适合按常规节奏游玩，建议开园后优先完成前两项重点项目。")
+        recommendations.append("This window supports a standard touring pace; finish your top two priorities shortly after park opening.")
 
     return recommendations[:4]
 
@@ -688,7 +723,7 @@ def build_summary_payload(overview, day_results, drivers, operational_recommenda
     avg_rain_probability = round(mean(item["weather"]["rain_probability"] for item in day_results), 2)
 
     return {
-        "project_theme": "面向上海迪士尼乐园运营的客流预测与商业洞察分析",
+        "project_theme": "Shanghai Disneyland Operations Visitor Flow Forecasting and Business Insight Analysis",
         "report_scope": {
             "start_date": overview["start_date"],
             "end_date": overview["end_date"],
@@ -705,14 +740,14 @@ def build_summary_payload(overview, day_results, drivers, operational_recommenda
         },
         "peak_day": {
             "date": peak_day["date"],
-            "date_label": to_cn_date_label(peak_day["date"]),
+            "date_label": to_display_date_label(peak_day["date"]),
             "predicted_attendance": peak_day["predicted_attendance"],
             "crowd_level": peak_day["crowd_level"],
             "weather_label": peak_day["weather"]["weather_label"],
         },
         "calm_day": {
             "date": calm_day["date"],
-            "date_label": to_cn_date_label(calm_day["date"]),
+            "date_label": to_display_date_label(calm_day["date"]),
             "predicted_attendance": calm_day["predicted_attendance"],
             "crowd_level": calm_day["crowd_level"],
         },
@@ -729,7 +764,7 @@ def build_summary_payload(overview, day_results, drivers, operational_recommenda
             "high_rain_risk_days": overview["rainy_risk_days"],
         },
         "best_visit_days": [
-            {"date": day_date, "date_label": to_cn_date_label(day_date)}
+            {"date": day_date, "date_label": to_display_date_label(day_date)}
             for day_date in best_days
         ],
         "drivers": drivers,
@@ -740,7 +775,7 @@ def build_summary_payload(overview, day_results, drivers, operational_recommenda
         "daily_context": [
             {
                 "date": item["date"],
-                "date_label": to_cn_date_label(item["date"]),
+                "date_label": to_display_date_label(item["date"]),
                 "weekday": item["weekday"],
                 "predicted_attendance": item["predicted_attendance"],
                 "baseline_attendance": item["baseline_attendance"],
@@ -771,8 +806,54 @@ def extract_json_object(text):
     start = cleaned.find("{")
     end = cleaned.rfind("}")
     if start == -1 or end == -1 or end < start:
-        raise AIInsightError("AI 返回内容不是有效的 JSON。")
+        raise AIInsightError("The AI response was not valid JSON.")
     return cleaned[start : end + 1]
+
+
+def dedupe_preserve_order(items):
+    """Return a list without duplicates while preserving order."""
+    deduped = []
+    seen = set()
+    for item in items:
+        normalized = str(item).strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(normalized)
+    return deduped
+
+
+def coerce_optional_text_list(value, maximum=4):
+    """Normalize AI text output into a list without enforcing a minimum length."""
+    if isinstance(value, str):
+        items = [normalize_ai_numbers_in_text(value)]
+    elif isinstance(value, list):
+        items = [
+            normalize_ai_numbers_in_text(str(item))
+            for item in value
+            if str(item).strip()
+        ]
+    else:
+        items = []
+    return dedupe_preserve_order(items)[:maximum]
+
+
+def merge_text_list_with_fallback(value, fallback_items, maximum=4):
+    """Use AI items first and top up with fallback items when needed."""
+    combined = coerce_optional_text_list(value, maximum=maximum) + [
+        normalize_ai_numbers_in_text(str(item))
+        for item in fallback_items
+        if str(item).strip()
+    ]
+    merged = dedupe_preserve_order(combined)[:maximum]
+    if not merged:
+        raise AIInsightError("The AI response did not return any usable recommendation items.")
+    return merged
+
+
+def split_into_chunks(items, chunk_size):
+    """Split a list into smaller chunks."""
+    return [items[index : index + chunk_size] for index in range(0, len(items), chunk_size)]
 
 
 CHINESE_NUMERAL_CHARS = "零〇一二两三四五六七八九十百千万亿"
@@ -898,7 +979,7 @@ def coerce_text_list(value, field_name, minimum=1, maximum=4):
 
     items = items[:maximum]
     if len(items) < minimum:
-        raise AIInsightError(f"AI 返回的 {field_name} 数量不足。")
+        raise AIInsightError(f"The AI response did not include enough items for {field_name}.")
     return items
 
 
@@ -911,22 +992,21 @@ def coerce_summary_text(value):
             if str(item).strip()
         ]
         if not parts:
-            raise AIInsightError("AI 未返回有效摘要。")
+            raise AIInsightError("The AI response did not return a valid summary.")
         return "\n\n".join(parts[:4])
 
     if isinstance(value, str) and value.strip():
         return normalize_ai_numbers_in_text(value)
 
-    raise AIInsightError("AI 未返回有效摘要。")
+    raise AIInsightError("The AI response did not return a valid summary.")
 
 
 def merge_ai_daily_advice(day_results, daily_advice):
     """把 AI 生成的逐日建议回填到预测结果"""
     if not isinstance(daily_advice, list):
-        raise AIInsightError("AI 未返回逐日建议列表。")
+        return day_results
 
     advice_by_date = {}
-    fallback_items = []
     for item in daily_advice:
         if not isinstance(item, dict):
             continue
@@ -938,148 +1018,211 @@ def merge_ai_daily_advice(day_results, daily_advice):
         elif day_label:
             advice_by_date[day_label] = item
 
-        fallback_items.append(item)
-
     for index, day_result in enumerate(day_results):
         ai_day = advice_by_date.get(day_result["date"])
         if not ai_day:
-            ai_day = advice_by_date.get(to_cn_date_label(day_result["date"]))
-        if not ai_day and index < len(fallback_items):
-            ai_day = fallback_items[index]
+            ai_day = advice_by_date.get(to_display_date_label(day_result["date"]))
         if not ai_day:
-            raise AIInsightError(f"AI 未返回 {day_result['date']} 的逐日建议。")
+            continue
 
         business_note = normalize_ai_numbers_in_text(str(ai_day.get("business_note", "")))
         ops_focus = normalize_ai_numbers_in_text(str(ai_day.get("ops_focus", "")))
         visitor_tip = normalize_ai_numbers_in_text(str(ai_day.get("visitor_tip", "")))
 
-        if not business_note or not ops_focus or not visitor_tip:
-            raise AIInsightError(f"AI 返回的 {day_result['date']} 逐日建议不完整。")
-
-        day_result["business_note"] = business_note
-        day_result["ops_focus"] = ops_focus
-        day_result["visitor_tip"] = visitor_tip
+        if business_note:
+            day_result["business_note"] = business_note
+        if ops_focus:
+            day_result["ops_focus"] = ops_focus
+        if visitor_tip:
+            day_result["visitor_tip"] = visitor_tip
 
     return day_results
 
 
+def call_modelscope_json(client, messages, max_tokens):
+    """Call the configured ModelScope models and return the first parseable JSON payload."""
+    model_candidates = get_modelscope_model_candidates()
+    model_errors = []
+    max_attempts = max(1, DEFAULT_AI_MODEL_MAX_ATTEMPTS)
+
+    for model_name in model_candidates:
+        for _ in range(max_attempts):
+            try:
+                response = client.with_options(timeout=DEFAULT_AI_MODEL_TIMEOUT_SECONDS).chat.completions.create(
+                    model=model_name,
+                    temperature=0.15,
+                    max_tokens=max_tokens,
+                    messages=messages,
+                )
+            except Exception as exc:
+                model_errors.append(f"{model_name}: API call failed")
+                continue
+
+            choices = getattr(response, "choices", None)
+            if not choices:
+                model_errors.append(f"{model_name}: empty choices")
+                continue
+
+            message = getattr(choices[0], "message", None)
+            content = getattr(message, "content", None) if message else None
+            if not content:
+                model_errors.append(f"{model_name}: empty message content")
+                continue
+
+            try:
+                return json.loads(extract_json_object(content)), model_name
+            except (json.JSONDecodeError, AIInsightError):
+                model_errors.append(f"{model_name}: returned non-parseable JSON")
+                continue
+
+    reason_text = "; ".join(model_errors[-6:]) if model_errors else "unknown model failure"
+    raise AIInsightError(
+        "The AI returned no valid content after automatically trying fallback models. "
+        f"Recent failure details: {reason_text}."
+    )
+
+
 def generate_ai_insights(summary_payload):
-    """调用 AI 生成摘要、区间建议与逐日建议"""
+    """Call AI for overview insights and chunked daily advice."""
     token = get_modelscope_access_token()
     if not token:
-        raise AIInsightError("未配置可用的 ModelScope Token。")
+        raise AIInsightError("No valid ModelScope token is configured.")
 
     try:
-        from openai import APITimeoutError, OpenAI
+        from openai import OpenAI
     except ImportError as exc:
-        raise AIInsightError("当前环境缺少 openai 依赖。") from exc
+        raise AIInsightError("The current environment is missing the openai dependency.") from exc
 
     client = OpenAI(
         api_key=token,
         base_url=os.getenv("MODELSCOPE_BASE_URL", DEFAULT_MODELSCOPE_BASE_URL),
-        timeout=80.0,
+        timeout=DEFAULT_AI_MODEL_TIMEOUT_SECONDS,
     )
-    payload_text = json.dumps(summary_payload, ensure_ascii=False)
 
-    messages = [
+    overview_payload = {
+        "project_theme": summary_payload["project_theme"],
+        "report_scope": summary_payload["report_scope"],
+        "forecast": summary_payload["forecast"],
+        "peak_day": summary_payload["peak_day"],
+        "calm_day": summary_payload["calm_day"],
+        "calendar_context": summary_payload["calendar_context"],
+        "weather_context": summary_payload["weather_context"],
+        "best_visit_days": summary_payload["best_visit_days"],
+        "drivers": summary_payload["drivers"],
+        "recommendations": summary_payload["recommendations"],
+    }
+    overview_messages = [
         {
             "role": "system",
             "content": (
-                "你是一名主题乐园商业分析顾问。"
-                "请严格基于输入事实，用中文输出。"
-                "不要虚构数据，不要补充输入里没有的日期、人数或活动。"
-                "只返回 JSON 对象，不要使用 Markdown，不要输出代码块。"
+                "You are a theme park business analytics consultant. "
+                "Use only the facts in the input and write in natural English. "
+                "Do not invent dates, visitor counts, activities, or assumptions that are not present. "
+                "Return only a JSON object, with no Markdown and no code fences."
             ),
         },
         {
             "role": "user",
             "content": (
-                "请根据以下 JSON，为上海迪士尼运营管理者生成结构化结果。"
-                '返回 JSON，字段必须严格为："summary"、"drivers"、"operations"、"visitors"、"daily_advice"。'
-                '"summary" 是 4 条数组，每条 40-70 字；'
-                '"drivers"、"operations"、"visitors" 各返回 3 条，每条不超过 32 字；'
-                '"daily_advice" 必须覆盖输入里的每一个 date，每项包含 "date"、"business_note"、"ops_focus"、"visitor_tip"，'
-                '三个文本字段都不超过 28 字。'
-                "如需引用日期，请优先使用输入中的 date_label 原样表达。"
-                "所有数字必须使用阿拉伯数字，不要使用中文数字，例如 318937 人次、30-45 分钟、5月1日、22点。"
-                "优先使用自然的 business 表达，例如“开园前后”“午后”“晚间闭园前”“降雨风险较高”。"
-                "不要直接复述字段名，不要写 0.48 降雨概率；如需表达概率，请写成 48%。"
-                "除非特别必要，避免机械地写 08:00 开园、0.48 降雨概率 这类机器式表达。"
-                "所有文本都要简洁、可执行、适合 business 展示。\n\n"
-                f"{payload_text}"
+                "Based on the following JSON, generate a structured output for Shanghai Disneyland operations stakeholders. "
+                'Return JSON with exactly these fields: "summary", "drivers", "operations", "visitors". '
+                '"summary" must be an array of 4 concise English paragraphs. '
+                '"drivers", "operations", and "visitors" must each contain 3 concise English bullet-style strings. '
+                "If you reference a date, prefer the provided date_label. "
+                "Use Arabic numerals only, for example 318,937 visitors, 30-45 minutes, May 1, and 10:00 PM. "
+                "Use natural business wording such as park opening, midday, late afternoon, pre-show period, or elevated rain risk. "
+                "Keep all text concise, practical, and presentation-ready.\n\n"
+                f"{json.dumps(overview_payload, ensure_ascii=False)}"
             ),
         },
     ]
+    overview_parsed, _ = call_modelscope_json(
+        client,
+        overview_messages,
+        max_tokens=DEFAULT_AI_OVERVIEW_MAX_TOKENS,
+    )
 
-    model_candidates = get_modelscope_model_candidates()
-    parsed = None
-    last_error = None
-    for model_name in model_candidates:
-        content = None
-        for _ in range(2):
-            try:
-                response = client.chat.completions.create(
-                    model=model_name,
-                    temperature=0.15,
-                    max_tokens=950,
-                    messages=messages,
-                )
-            except APITimeoutError as exc:
-                last_error = AIInsightError(f"{model_name} 生成建议超时，请稍后重试。")
-                break
-            except Exception as exc:
-                last_error = AIInsightError(f"{model_name} 调用失败，请稍后重试。")
-                break
-
-            choices = getattr(response, "choices", None)
-            if not choices:
-                continue
-
-            message = getattr(choices[0], "message", None)
-            content = getattr(message, "content", None) if message else None
-            if content:
-                break
-
-        if not content:
-            last_error = AIInsightError(f"{model_name} 未返回有效内容。")
-            continue
-
+    daily_advice = []
+    daily_chunks = split_into_chunks(summary_payload.get("daily_context", []), DEFAULT_AI_DAILY_CHUNK_SIZE)
+    for chunk in daily_chunks:
+        chunk_payload = {
+            "project_theme": summary_payload["project_theme"],
+            "report_scope": summary_payload["report_scope"],
+            "forecast": summary_payload["forecast"],
+            "daily_context": chunk,
+        }
+        daily_messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a theme park business analytics consultant. "
+                    "Use only the facts in the input and write in natural English. "
+                    "Return only a JSON object."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Based on the following JSON, generate day-level guidance. "
+                    'Return JSON with exactly one field: "daily_advice". '
+                    '"daily_advice" must be an array that covers every input day exactly once. '
+                    'Each item must include "date", "business_note", "ops_focus", and "visitor_tip". '
+                    'The "date" field must copy the exact ISO date from the input, such as 2026-05-01. '
+                    "Keep each text field concise, natural, and practical for a business presentation.\n\n"
+                    f"{json.dumps(chunk_payload, ensure_ascii=False)}"
+                ),
+            },
+        ]
         try:
-            parsed = json.loads(extract_json_object(content))
-            break
-        except (json.JSONDecodeError, AIInsightError) as exc:
-            last_error = AIInsightError(f"{model_name} 返回内容无法解析。")
+            daily_parsed, _ = call_modelscope_json(
+                client,
+                daily_messages,
+                max_tokens=DEFAULT_AI_DAILY_MAX_TOKENS,
+            )
+        except AIInsightError:
             continue
 
-    if parsed is None:
-        if len(model_candidates) > 1:
-            raise AIInsightError("AI 未返回有效内容，已自动切换备用模型，请稍后重试。") from last_error
-        raise AIInsightError("AI 未返回有效内容，请稍后重试。") from last_error
+        chunk_advice = daily_parsed.get("daily_advice")
+        if isinstance(chunk_advice, list):
+            daily_advice.extend(chunk_advice)
 
     return {
-        "summary_text": coerce_summary_text(parsed.get("summary")),
-        "key_drivers": coerce_text_list(parsed.get("drivers"), "关键驱动", minimum=3, maximum=4),
-        "operational_recommendations": coerce_text_list(parsed.get("operations"), "运营建议", minimum=3, maximum=4),
-        "visitor_recommendations": coerce_text_list(parsed.get("visitors"), "游客建议", minimum=3, maximum=4),
-        "daily_advice": parsed.get("daily_advice"),
+        "summary_text": coerce_summary_text(overview_parsed.get("summary")),
+        "key_drivers": merge_text_list_with_fallback(
+            overview_parsed.get("drivers"),
+            summary_payload.get("drivers", []),
+            maximum=4,
+        ),
+        "operational_recommendations": merge_text_list_with_fallback(
+            overview_parsed.get("operations"),
+            summary_payload.get("recommendations", {}).get("operations", []),
+            maximum=4,
+        ),
+        "visitor_recommendations": merge_text_list_with_fallback(
+            overview_parsed.get("visitors"),
+            summary_payload.get("recommendations", {}).get("visitors", []),
+            maximum=4,
+        ),
+        "daily_advice": daily_advice,
     }
 
 
 def generate_rule_summary(overview, drivers, operational_recommendations):
     """无 AI 时的规则摘要"""
     peak_day = overview["peak_day"]
-    best_days = "、".join(item["date"] for item in overview["best_visit_days"]) or "暂无明显低压日"
-    driver_text = "；".join(drivers[:2])
-    ops_text = "；".join(operational_recommendations[:2])
+    best_days = ", ".join(item["date"] for item in overview["best_visit_days"]) or "No clear lower-pressure day"
+    driver_text = "; ".join(drivers[:2])
+    ops_text = "; ".join(operational_recommendations[:2])
 
     return (
-        f"在 {overview['start_date']} 至 {overview['end_date']} 的 {overview['day_count']} 天窗口中，"
-        f"预计日均客流约 {overview['average_attendance']:,} 人，整体处于“{overview['range_signal']}”区间。"
-        f"峰值出现在 {peak_day['date']}，预计约 {peak_day['predicted_attendance']:,} 人。\n\n"
-        f"主要驱动因素包括：{driver_text}\n\n"
-        f"若按当前窗口组织运营，建议重点关注 {overview['busy_days']} 个繁忙日与 "
-        f"{overview['rainy_risk_days']} 个天气风险日，对开园早高峰和晚间演出前后做弹性调度。\n\n"
-        f"行动建议：{ops_text}。对游客而言，优先考虑 {best_days} 作为更轻松的游玩窗口。"
+        f"Across the {overview['day_count']}-day window from {overview['start_date']} to {overview['end_date']}, "
+        f"average daily attendance is forecast at about {overview['average_attendance']:,}, placing the period in the "
+        f'"{overview["range_signal"]}" range. The highest-pressure day is {peak_day["date"]}, with an estimated '
+        f'{peak_day["predicted_attendance"]:,} visitors.\n\n'
+        f"Primary demand drivers include: {driver_text}\n\n"
+        f"From an operations perspective, the key watchpoints are {overview['busy_days']} busy days and "
+        f"{overview['rainy_risk_days']} weather-risk days, especially around park opening and the pre-show evening window.\n\n"
+        f"Recommended actions: {ops_text}. For visitors, {best_days} should offer the lighter touring window."
     )
 
 
@@ -1089,11 +1232,11 @@ def analyze_date_range(start_date_str, end_date_str, enable_ai_summary=True):
     end_day = datetime.strptime(end_date_str, "%Y-%m-%d").date()
 
     if end_day < start_day:
-        raise ValueError("结束日期不能早于开始日期")
+        raise ValueError("The end date cannot be earlier than the start date.")
 
     day_count = (end_day - start_day).days + 1
     if day_count > 31:
-        raise ValueError("单次分析最多支持 31 天，请缩短日期区间")
+        raise ValueError("A single analysis supports up to 31 days. Please choose a shorter range.")
 
     attendance_lookup = dict(HISTORICAL_ATTENDANCE_LOOKUP)
     amap_weather_bundle = load_amap_weather_forecast()
@@ -1133,11 +1276,11 @@ def analyze_date_range(start_date_str, end_date_str, enable_ai_summary=True):
     )[:2]
 
     if peak_days > 0 or busy_days >= max(2, day_count // 3):
-        range_signal = "需要精准计划"
+        range_signal = "Careful planning needed"
     elif average_attendance <= ATTENDANCE_Q35:
-        range_signal = "轻松窗口"
+        range_signal = "Lower-pressure window"
     else:
-        range_signal = "稳态窗口"
+        range_signal = "Stable window"
 
     overview = {
         "start_date": start_date_str,
@@ -1172,15 +1315,24 @@ def analyze_date_range(start_date_str, end_date_str, enable_ai_summary=True):
 
     summary_source = "rule"
     summary_text = generate_rule_summary(overview, key_drivers, operational_recommendations)
+    ai_status = {
+        "requested": bool(enable_ai_summary),
+        "used": False,
+        "error": None,
+    }
 
     if enable_ai_summary:
-        ai_insights = generate_ai_insights(summary_payload)
-        day_results = merge_ai_daily_advice(day_results, ai_insights["daily_advice"])
-        key_drivers = ai_insights["key_drivers"]
-        operational_recommendations = ai_insights["operational_recommendations"]
-        visitor_recommendations = ai_insights["visitor_recommendations"]
-        summary_text = ai_insights["summary_text"]
-        summary_source = "ai"
+        try:
+            ai_insights = generate_ai_insights(summary_payload)
+            day_results = merge_ai_daily_advice(day_results, ai_insights["daily_advice"])
+            key_drivers = ai_insights["key_drivers"]
+            operational_recommendations = ai_insights["operational_recommendations"]
+            visitor_recommendations = ai_insights["visitor_recommendations"]
+            summary_text = ai_insights["summary_text"]
+            summary_source = "ai"
+            ai_status["used"] = True
+        except AIInsightError as exc:
+            ai_status["error"] = str(exc)
 
     return {
         "query": {
@@ -1189,7 +1341,7 @@ def analyze_date_range(start_date_str, end_date_str, enable_ai_summary=True):
             "day_count": day_count,
         },
         "weather_meta": {
-            "city": amap_weather_bundle.get("city", "上海"),
+            "city": "Shanghai",
             "adcode": amap_weather_bundle.get("adcode", get_amap_city_code()),
             "reporttime": amap_weather_bundle.get("reporttime"),
         },
@@ -1201,6 +1353,7 @@ def analyze_date_range(start_date_str, end_date_str, enable_ai_summary=True):
             "text": summary_text,
             "source": summary_source,
         },
+        "ai_status": ai_status,
         "summary_payload": summary_payload,
         "daily_predictions": day_results,
     }
@@ -1221,7 +1374,7 @@ def analyze_range():
         end_date = data.get("end_date")
 
         if not start_date or not end_date:
-            return jsonify({"success": False, "error": "请同时提供开始日期和结束日期"}), 400
+            return jsonify({"success": False, "error": "Please provide both a start date and an end date."}), 400
 
         result = analyze_date_range(start_date, end_date, enable_ai_summary=data.get("enable_ai_summary", True))
         return jsonify({"success": True, "data": result})
@@ -1240,7 +1393,7 @@ def predict():
         data = request.get_json() or {}
         date_str = data.get("date")
         if not date_str:
-            return jsonify({"success": False, "error": "请提供日期"}), 400
+            return jsonify({"success": False, "error": "Please provide a date."}), 400
 
         day_value = datetime.strptime(date_str, "%Y-%m-%d").date()
         amap_weather_bundle = load_amap_weather_forecast()
@@ -1260,7 +1413,7 @@ def predict_week():
         data = request.get_json() or {}
         start_date_str = data.get("start_date")
         if not start_date_str:
-            return jsonify({"success": False, "error": "请提供开始日期"}), 400
+            return jsonify({"success": False, "error": "Please provide a start date."}), 400
 
         start_day = datetime.strptime(start_date_str, "%Y-%m-%d").date()
         end_day = start_day + timedelta(days=6)
@@ -1281,6 +1434,6 @@ def get_holidays():
 
 
 if __name__ == "__main__":
-    print("上海迪士尼运营洞察系统启动...")
-    print("访问地址: http://localhost:5001")
+    print("Shanghai Disneyland operations insight app started.")
+    print("Open: http://localhost:5001")
     app.run(debug=True, host="0.0.0.0", port=5001)
