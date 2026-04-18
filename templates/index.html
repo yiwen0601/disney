@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>上海迪士尼乐园运营客流预测与商业洞察分析</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-night: #07111f;
+            --bg-deep: #0d2236;
+            --text-main: #f5f9ff;
+            --text-muted: rgba(245, 249, 255, 0.72);
+            --panel: rgba(9, 24, 39, 0.74);
+            --panel-soft: rgba(255, 255, 255, 0.88);
+            --line-soft: rgba(255, 255, 255, 0.12);
+            --navy: #153a57;
+            --teal: #47d4c3;
+            --gold: #ffc66d;
+            --coral: #ff7f5f;
+            --calm: #53d28c;
+            --steady: #74b8ff;
+            --busy: #ffb547;
+            --peak: #ff6a70;
+            --ink: #122032;
+            --shadow-heavy: 0 28px 80px rgba(2, 10, 18, 0.38);
+            --shadow-soft: 0 18px 45px rgba(6, 18, 29, 0.22);
+            --radius-xl: 30px;
+            --radius-lg: 24px;
+            --radius-md: 18px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            color: var(--text-main);
+            background:
+                radial-gradient(circle at 10% 20%, rgba(71, 212, 195, 0.18), transparent 32%),
+                radial-gradient(circle at 85% 15%, rgba(255, 198, 109, 0.16), transparent 28%),
+                radial-gradient(circle at 80% 78%, rgba(255, 127, 95, 0.12), transparent 30%),
+                linear-gradient(155deg, #07111f 0%, #0b1b2d 46%, #102942 100%);
+            overflow-x: hidden;
+        }
+
+        .page-shell {
+            position: relative;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .ambient-orb {
+            position: absolute;
+            border-radius: 999px;
+            filter: blur(26px);
+            opacity: 0.55;
+            animation: drift 14s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        .orb-one {
+            width: 240px;
+            height: 240px;
+            top: 80px;
+            right: -30px;
+            background: rgba(71, 212, 195, 0.2);
+        }
+
+        .orb-two {
+            width: 300px;
+            height: 300px;
+            bottom: 80px;
+            left: -90px;
+            background: rgba(255, 198, 109, 0.16);
+            animation-delay: -4s;
+        }
+
+        .orb-three {
+            width: 180px;
+            height: 180px;
+            top: 42%;
+            left: 18%;
+            background: rgba(116, 184, 255, 0.14);
+            animation-delay: -8s;
+        }
+
+        .app-container {
+            position: relative;
+            z-index: 1;
+            width: min(1180px, calc(100% - 40px));
+            margin: 0 auto;
+            padding: 32px 0 56px;
+        }
+
+        .glass-panel {
+            border: 1px solid var(--line-soft);
+            background: var(--panel);
+            backdrop-filter: blur(22px);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-heavy);
+        }
+
+        .hero-panel {
+            padding: 34px;
+            animation: riseUp 0.8s ease both;
+        }
+
+        .hero-title {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 3.45rem);
+            line-height: 1.08;
+            letter-spacing: -0.04em;
+        }
+
+        .planner-panel {
+            margin-top: 26px;
+            padding: 30px;
+            animation: riseUp 0.95s ease both;
+        }
+
+        .planner-grid {
+            display: flex;
+            justify-content: center;
+        }
+
+        .planner-form {
+            display: grid;
+            gap: 16px;
+            width: min(100%, 840px);
+        }
+
+        .status-banner {
+            display: none;
+            padding: 14px 16px;
+            border-radius: 16px;
+            font-size: 0.94rem;
+            line-height: 1.6;
+        }
+
+        .status-banner.error {
+            display: block;
+            background: rgba(255, 106, 112, 0.14);
+            border: 1px solid rgba(255, 106, 112, 0.24);
+            color: #ffd2d4;
+        }
+
+        .field-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .field-card {
+            padding: 16px;
+            border-radius: var(--radius-lg);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .field-card label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 0.88rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: rgba(245, 249, 255, 0.72);
+        }
+
+        .field-card input[type="date"] {
+            width: 100%;
+            border: none;
+            outline: none;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.94);
+            color: var(--ink);
+            font-size: 1rem;
+            box-shadow: inset 0 0 0 1px rgba(18, 32, 50, 0.06);
+        }
+
+        .primary-button {
+            border: none;
+            border-radius: 20px;
+            padding: 16px 22px;
+            background: linear-gradient(135deg, #4bd6c4 0%, #ffd083 100%);
+            color: #0d1a26;
+            font-weight: 700;
+            font-size: 1rem;
+            box-shadow: 0 18px 35px rgba(75, 214, 196, 0.28);
+            transition: transform 0.24s ease, box-shadow 0.24s ease;
+        }
+
+        .primary-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 22px 45px rgba(75, 214, 196, 0.34);
+        }
+
+        .primary-button:disabled {
+            opacity: 0.68;
+            cursor: wait;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .loading-panel {
+            display: none;
+            margin-top: 24px;
+            padding: 24px;
+            border-radius: var(--radius-xl);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            box-shadow: var(--shadow-soft);
+            animation: pulsePane 1.6s ease-in-out infinite;
+        }
+
+        .loading-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            margin-bottom: 14px;
+        }
+
+        .loading-title {
+            font-size: 1.05rem;
+            margin-bottom: 8px;
+        }
+
+        .loading-subtitle {
+            color: rgba(245, 249, 255, 0.68);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .loading-progress {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 54px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.10);
+            color: rgba(245, 249, 255, 0.86);
+            font-size: 0.86rem;
+        }
+
+        .loading-bars {
+            display: grid;
+            gap: 12px;
+        }
+
+        .loading-bar {
+            height: 14px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+            background-size: 200% 100%;
+            animation: shimmer 1.2s linear infinite;
+        }
+
+        .loading-bar:nth-child(1) { width: 76%; }
+        .loading-bar:nth-child(2) { width: 94%; }
+        .loading-bar:nth-child(3) { width: 68%; }
+
+        .loading-steps {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .loading-step {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: rgba(245, 249, 255, 0.58);
+            font-size: 0.84rem;
+            transition: all 0.22s ease;
+        }
+
+        .loading-step.active {
+            background: rgba(71, 212, 195, 0.16);
+            border-color: rgba(71, 212, 195, 0.26);
+            color: rgba(245, 249, 255, 0.95);
+        }
+
+        .results-panel {
+            display: none;
+            margin-top: 28px;
+            animation: riseUp 0.6s ease both;
+        }
+
+        .section-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .section-heading h2,
+        .section-heading h3 {
+            margin: 0;
+            letter-spacing: -0.04em;
+        }
+
+        .section-heading p {
+            margin: 0;
+            color: var(--text-muted);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 22px;
+        }
+
+        .metric-card {
+            padding: 22px 20px;
+            border-radius: var(--radius-lg);
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .metric-label {
+            color: rgba(245, 249, 255, 0.70);
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+        }
+
+        .metric-value {
+            font-size: 1.7rem;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -0.04em;
+            margin-bottom: 8px;
+        }
+
+        .metric-note {
+            color: rgba(245, 249, 255, 0.66);
+            font-size: 0.88rem;
+            line-height: 1.6;
+        }
+
+        .weather-overview {
+            margin-bottom: 22px;
+        }
+
+        .weather-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 18px;
+            margin-bottom: 18px;
+        }
+
+        .weather-title {
+            margin: 0;
+            font-size: 1.4rem;
+            letter-spacing: -0.04em;
+        }
+
+        .weather-update {
+            display: inline-flex;
+            align-items: center;
+            padding: 9px 12px;
+            border-radius: 999px;
+            background: rgba(18, 32, 50, 0.06);
+            color: rgba(18, 32, 50, 0.66);
+            font-size: 0.84rem;
+            white-space: nowrap;
+        }
+
+        .weather-summary {
+            margin: 0;
+            color: rgba(18, 32, 50, 0.72);
+            line-height: 1.75;
+        }
+
+        .weather-stat-row {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .weather-stat {
+            padding: 14px 16px;
+            border-radius: 18px;
+            background: rgba(18, 32, 50, 0.05);
+        }
+
+        .weather-stat-label {
+            color: rgba(18, 32, 50, 0.50);
+            font-size: 0.82rem;
+            margin-bottom: 8px;
+        }
+
+        .weather-stat-value {
+            color: var(--ink);
+            font-size: 1.08rem;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+
+        .weather-strip {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+
+        .weather-chip {
+            padding: 16px;
+            border-radius: 20px;
+            background: linear-gradient(180deg, rgba(18, 32, 50, 0.05), rgba(18, 32, 50, 0.02));
+            border: 1px solid rgba(18, 32, 50, 0.06);
+        }
+
+        .weather-chip-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .weather-chip-date {
+            color: rgba(18, 32, 50, 0.70);
+            font-size: 0.86rem;
+        }
+
+        .weather-chip-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 9px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+
+        .weather-chip-badge.forecast {
+            background: rgba(71, 212, 195, 0.16);
+            color: #156c61;
+        }
+
+        .weather-chip-badge.estimate {
+            background: rgba(18, 32, 50, 0.08);
+            color: rgba(18, 32, 50, 0.68);
+        }
+
+        .weather-chip-label {
+            color: var(--ink);
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .weather-chip-temp {
+            color: rgba(18, 32, 50, 0.84);
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .weather-chip-meta {
+            color: rgba(18, 32, 50, 0.62);
+            font-size: 0.86rem;
+            line-height: 1.6;
+        }
+
+        .insight-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+            gap: 18px;
+            margin-bottom: 24px;
+        }
+
+        .light-panel {
+            border-radius: var(--radius-xl);
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--ink);
+            box-shadow: var(--shadow-soft);
+            padding: 24px;
+        }
+
+        .panel-kicker {
+            color: rgba(18, 32, 50, 0.46);
+            font-size: 0.82rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .panel-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .panel-head h3 {
+            margin: 0;
+            font-size: 1.4rem;
+            letter-spacing: -0.04em;
+        }
+
+        .source-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 0.84rem;
+            background: rgba(18, 32, 50, 0.08);
+            color: rgba(18, 32, 50, 0.74);
+        }
+
+        .summary-text {
+            display: grid;
+            gap: 14px;
+        }
+
+        .summary-text p {
+            margin: 0;
+            line-height: 1.78;
+            color: rgba(18, 32, 50, 0.84);
+        }
+
+        .driver-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .driver-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 16px;
+            background: rgba(18, 32, 50, 0.08);
+            color: rgba(18, 32, 50, 0.84);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .action-columns {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        .action-box {
+            padding: 18px;
+            border-radius: var(--radius-lg);
+            background: rgba(18, 32, 50, 0.05);
+        }
+
+        .action-box h4 {
+            margin: 0 0 12px;
+            font-size: 1rem;
+            color: var(--navy);
+        }
+
+        .action-list {
+            margin: 0;
+            padding-left: 18px;
+            color: rgba(18, 32, 50, 0.82);
+            line-height: 1.7;
+        }
+
+        .day-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+            gap: 16px;
+        }
+
+        .day-card {
+            padding: 22px;
+            border-radius: var(--radius-xl);
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--ink);
+            box-shadow: var(--shadow-soft);
+            transition: transform 0.24s ease, box-shadow 0.24s ease;
+        }
+
+        .day-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 24px 45px rgba(6, 18, 29, 0.18);
+        }
+
+        .day-card-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .day-card-date {
+            font-size: 1.18rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+        }
+
+        .day-card-weekday {
+            color: rgba(18, 32, 50, 0.56);
+            font-size: 0.9rem;
+            margin-top: 6px;
+        }
+
+        .crowd-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 76px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 0.88rem;
+            font-weight: 700;
+        }
+
+        .crowd-pill.relaxed {
+            background: rgba(83, 210, 140, 0.18);
+            color: #0e7640;
+        }
+
+        .crowd-pill.steady {
+            background: rgba(116, 184, 255, 0.18);
+            color: #245f9f;
+        }
+
+        .crowd-pill.busy {
+            background: rgba(255, 181, 71, 0.24);
+            color: #8c5200;
+        }
+
+        .crowd-pill.peak {
+            background: rgba(255, 106, 112, 0.22);
+            color: #a42d39;
+        }
+
+        .day-attendance {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+            margin-bottom: 12px;
+        }
+
+        .day-attendance small {
+            font-size: 0.92rem;
+            color: rgba(18, 32, 50, 0.50);
+            font-weight: 600;
+        }
+
+        .day-weather-box {
+            margin-bottom: 14px;
+            padding: 14px 15px;
+            border-radius: 18px;
+            background: rgba(18, 32, 50, 0.05);
+        }
+
+        .day-weather-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .day-weather-label {
+            color: var(--ink);
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .day-weather-source {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            white-space: nowrap;
+        }
+
+        .day-weather-source.forecast {
+            background: rgba(71, 212, 195, 0.16);
+            color: #156c61;
+        }
+
+        .day-weather-source.estimate {
+            background: rgba(18, 32, 50, 0.08);
+            color: rgba(18, 32, 50, 0.66);
+        }
+
+        .day-weather-detail,
+        .day-weather-time {
+            color: rgba(18, 32, 50, 0.68);
+            font-size: 0.86rem;
+            line-height: 1.7;
+        }
+
+        .day-weather-detail {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 14px;
+            margin-bottom: 6px;
+        }
+
+        .day-meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 10px;
+            border-radius: 14px;
+            background: rgba(18, 32, 50, 0.06);
+            color: rgba(18, 32, 50, 0.72);
+            font-size: 0.82rem;
+        }
+
+        .day-copy {
+            margin: 0 0 12px;
+            line-height: 1.7;
+            color: rgba(18, 32, 50, 0.80);
+        }
+
+        .day-foot {
+            display: grid;
+            gap: 10px;
+        }
+
+        .day-foot-item {
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: rgba(18, 32, 50, 0.05);
+            color: rgba(18, 32, 50, 0.76);
+            line-height: 1.65;
+            font-size: 0.88rem;
+        }
+
+        .footer {
+            margin-top: 28px;
+            text-align: center;
+            color: rgba(245, 249, 255, 0.56);
+            font-size: 0.9rem;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        @keyframes pulsePane {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-1px); }
+        }
+
+        @keyframes riseUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes drift {
+            0%, 100% { transform: translate3d(0, 0, 0); }
+            50% { transform: translate3d(10px, -14px, 0); }
+        }
+
+        @media (max-width: 1100px) {
+            .insight-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .weather-stat-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                width: min(100% - 24px, 100%);
+                padding: 20px 0 36px;
+            }
+
+            .hero-panel,
+            .planner-panel {
+                padding: 22px;
+            }
+
+            .field-row,
+            .action-columns,
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .loading-head,
+            .weather-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .section-heading {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .day-attendance {
+                font-size: 1.7rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <div class="ambient-orb orb-one"></div>
+        <div class="ambient-orb orb-two"></div>
+        <div class="ambient-orb orb-three"></div>
+
+        <main class="app-container">
+            <section class="glass-panel hero-panel">
+                <h1 class="hero-title">上海迪士尼乐园运营客流预测与商业洞察分析</h1>
+            </section>
+
+            <section class="glass-panel planner-panel">
+                <div class="planner-grid">
+                    <div class="planner-form">
+                        <div class="status-banner" id="statusBanner"></div>
+
+                        <div class="field-row">
+                            <div class="field-card">
+                                <label for="startDate">开始日期</label>
+                                <input type="date" id="startDate">
+                            </div>
+                            <div class="field-card">
+                                <label for="endDate">结束日期</label>
+                                <input type="date" id="endDate">
+                            </div>
+                        </div>
+
+                        <button class="primary-button" id="analyzeButton" type="button">生成该段时间的建议</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="loading-panel" id="loadingPanel">
+                <div class="loading-head">
+                    <div>
+                        <div class="loading-title" id="loadingTitle">系统正在生成这段时间的客流分析与建议...</div>
+                        <div class="loading-subtitle" id="loadingSubtitle">请稍候，结果生成后会自动展示。</div>
+                    </div>
+                    <div class="loading-progress" id="loadingProgressText">1 / 4</div>
+                </div>
+                <div class="loading-bars">
+                    <div class="loading-bar"></div>
+                    <div class="loading-bar"></div>
+                    <div class="loading-bar"></div>
+                </div>
+                <div class="loading-steps" id="loadingSteps"></div>
+            </section>
+
+            <section class="results-panel" id="resultsPanel">
+                <div class="section-heading">
+                    <div>
+                        <h2>区间分析结果</h2>
+                        <p id="rangeLabel">--</p>
+                    </div>
+                    <p id="rangeSignal">--</p>
+                </div>
+
+                <div class="metrics-grid">
+                    <article class="metric-card">
+                        <div class="metric-label">区间日均客流</div>
+                        <div class="metric-value" id="avgAttendance">--</div>
+                        <div class="metric-note" id="avgAttendanceNote">--</div>
+                    </article>
+                    <article class="metric-card">
+                        <div class="metric-label">峰值日期</div>
+                        <div class="metric-value" id="peakDate">--</div>
+                        <div class="metric-note" id="peakDateNote">--</div>
+                    </article>
+                    <article class="metric-card">
+                        <div class="metric-label">推荐窗口</div>
+                        <div class="metric-value" id="bestVisitDays">--</div>
+                        <div class="metric-note" id="bestVisitNote">--</div>
+                    </article>
+                </div>
+
+                <article class="light-panel weather-overview" id="weatherOverview"></article>
+
+                <div class="insight-grid">
+                    <article class="light-panel">
+                        <div class="panel-kicker">区间摘要</div>
+                        <div class="panel-head">
+                            <h3>管理摘要</h3>
+                            <span class="source-pill" id="summarySource">--</span>
+                        </div>
+                        <div class="summary-text" id="summaryText"></div>
+                    </article>
+
+                    <article class="light-panel">
+                        <div class="panel-kicker">建议输出</div>
+                        <div class="panel-head">
+                            <h3>关键驱动与行动建议</h3>
+                        </div>
+                        <div class="driver-row" id="driverList"></div>
+                        <div class="action-columns">
+                            <div class="action-box">
+                                <h4>运营动作</h4>
+                                <ul class="action-list" id="opsList"></ul>
+                            </div>
+                            <div class="action-box">
+                                <h4>游客建议</h4>
+                                <ul class="action-list" id="visitorList"></ul>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="section-heading">
+                    <div>
+                        <h3>逐日策略板</h3>
+                        <p>逐日查看客流、天气和建议。</p>
+                    </div>
+                </div>
+                <div class="day-card-grid" id="dayCardGrid"></div>
+            </section>
+
+            <footer class="footer">
+                上海迪士尼乐园运营客流预测与商业洞察分析
+            </footer>
+        </main>
+    </div>
+
+    <script>
+        const numberFormatter = new Intl.NumberFormat('zh-CN');
+        const startDateInput = document.getElementById('startDate');
+        const endDateInput = document.getElementById('endDate');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const statusBanner = document.getElementById('statusBanner');
+        const loadingPanel = document.getElementById('loadingPanel');
+        const loadingTitle = document.getElementById('loadingTitle');
+        const loadingSubtitle = document.getElementById('loadingSubtitle');
+        const loadingProgressText = document.getElementById('loadingProgressText');
+        const loadingSteps = document.getElementById('loadingSteps');
+        const resultsPanel = document.getElementById('resultsPanel');
+        const weatherOverview = document.getElementById('weatherOverview');
+        const summaryText = document.getElementById('summaryText');
+        const loadingStageItems = [
+            {
+                title: '正在获取上海天气预报...',
+                subtitle: '同步这段时间内可用的天气信息。',
+                label: '获取天气'
+            },
+            {
+                title: '正在计算区间客流...',
+                subtitle: '结合节假日、历史规律和天气因素进行预测。',
+                label: '计算客流'
+            },
+            {
+                title: '正在生成区间建议...',
+                subtitle: '整理运营关注点与游客建议。',
+                label: '生成建议'
+            },
+            {
+                title: '正在整理结果展示...',
+                subtitle: '即将展示完整分析结果。',
+                label: '整理结果'
+            }
+        ];
+        let loadingStageTimer = null;
+
+        function parseDateInput(value) {
+            const [year, month, day] = value.split('-').map(Number);
+            return new Date(year, month - 1, day);
+        }
+
+        function formatDateValue(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatCompactAttendance(value) {
+            if (value >= 10000) {
+                return `${(value / 10000).toFixed(1)}万`;
+            }
+            return numberFormatter.format(value);
+        }
+
+        function addDays(dateString, days) {
+            const date = parseDateInput(dateString);
+            date.setDate(date.getDate() + days);
+            return formatDateValue(date);
+        }
+
+        function diffDays(startDate, endDate) {
+            const start = parseDateInput(startDate);
+            const end = parseDateInput(endDate);
+            return Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        }
+
+        function setDefaultRange() {
+            const today = new Date();
+            const start = new Date(today);
+            start.setDate(start.getDate() + 1);
+            startDateInput.value = formatDateValue(start);
+            startDateInput.min = formatDateValue(today);
+            endDateInput.value = addDays(startDateInput.value, 2);
+            endDateInput.min = startDateInput.value;
+        }
+
+        function showError(message) {
+            statusBanner.textContent = message;
+            statusBanner.className = 'status-banner error';
+        }
+
+        function clearError() {
+            statusBanner.textContent = '';
+            statusBanner.className = 'status-banner';
+        }
+
+        function escapeHtml(text) {
+            return String(text ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function validateRange() {
+            clearError();
+
+            if (!startDateInput.value || !endDateInput.value) {
+                showError('请选择开始日期和结束日期。');
+                return false;
+            }
+
+            if (endDateInput.value < startDateInput.value) {
+                showError('结束日期不能早于开始日期。');
+                return false;
+            }
+
+            const days = diffDays(startDateInput.value, endDateInput.value);
+            if (days > 31) {
+                showError('单次分析最多支持 31 天，请缩短日期区间。');
+                return false;
+            }
+
+            return true;
+        }
+
+        function renderLoadingStage(index) {
+            const safeIndex = Math.min(index, loadingStageItems.length - 1);
+            const stage = loadingStageItems[safeIndex];
+            loadingTitle.textContent = stage.title;
+            loadingSubtitle.textContent = stage.subtitle;
+            loadingProgressText.textContent = `${safeIndex + 1} / ${loadingStageItems.length}`;
+            loadingSteps.innerHTML = loadingStageItems
+                .map((item, itemIndex) => {
+                    const activeClass = itemIndex <= safeIndex ? ' active' : '';
+                    return `<span class="loading-step${activeClass}">${escapeHtml(item.label)}</span>`;
+                })
+                .join('');
+        }
+
+        function startLoadingProgress() {
+            let stageIndex = 0;
+            renderLoadingStage(stageIndex);
+            loadingStageTimer = window.setInterval(() => {
+                if (stageIndex < loadingStageItems.length - 1) {
+                    stageIndex += 1;
+                    renderLoadingStage(stageIndex);
+                }
+            }, 1400);
+        }
+
+        function stopLoadingProgress() {
+            if (loadingStageTimer) {
+                window.clearInterval(loadingStageTimer);
+                loadingStageTimer = null;
+            }
+        }
+
+        function setLoading(isLoading) {
+            analyzeButton.disabled = isLoading;
+            loadingPanel.style.display = isLoading ? 'block' : 'none';
+            if (isLoading) {
+                startLoadingProgress();
+                return;
+            }
+            stopLoadingProgress();
+        }
+
+        function renderSummary(summary) {
+            summaryText.innerHTML = '';
+            const paragraphs = summary.text
+                .split(/\n+/)
+                .map(text => text.trim())
+                .filter(Boolean);
+
+            paragraphs.forEach(text => {
+                const p = document.createElement('p');
+                p.textContent = text;
+                summaryText.appendChild(p);
+            });
+
+            document.getElementById('summarySource').textContent =
+                summary.source === 'ai' ? '智能生成' : '规则生成';
+        }
+
+        function renderMetrics(data) {
+            const overview = data.overview;
+            document.getElementById('rangeLabel').textContent =
+                `${data.query.start_date} 至 ${data.query.end_date} · 共 ${data.query.day_count} 天`;
+            document.getElementById('rangeSignal').textContent = `区间信号：${overview.range_signal}`;
+
+            document.getElementById('avgAttendance').textContent = formatCompactAttendance(overview.average_attendance);
+            document.getElementById('avgAttendanceNote').textContent =
+                `较历史同类日期 ${overview.baseline_delta_pct >= 0 ? '+' : ''}${overview.baseline_delta_pct}%`;
+
+            document.getElementById('peakDate').textContent = overview.peak_day.date;
+            document.getElementById('peakDateNote').textContent =
+                `约 ${formatCompactAttendance(overview.peak_day.predicted_attendance)} · ${overview.peak_day.crowd_level}`;
+
+            const bestDays = overview.best_visit_days.map(day => day.date).join(' / ');
+            document.getElementById('bestVisitDays').textContent = bestDays || '--';
+            document.getElementById('bestVisitNote').textContent =
+                `${overview.holiday_days} 个节假日，平均置信度 ${Math.round(overview.average_confidence * 100)}%`;
+        }
+
+        function formatDisplayDate(dateString) {
+            const date = parseDateInput(dateString);
+            return `${date.getMonth() + 1}月${date.getDate()}日`;
+        }
+
+        function formatShortWeekday(dateString) {
+            return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][parseDateInput(dateString).getDay()];
+        }
+
+        function formatReportTime(reportTime) {
+            if (!reportTime) {
+                return '天气趋势参考';
+            }
+
+            const normalized = reportTime.replace(' ', 'T');
+            const parsed = new Date(normalized);
+            if (Number.isNaN(parsed.getTime())) {
+                return `更新于 ${reportTime}`;
+            }
+
+            const month = parsed.getMonth() + 1;
+            const day = parsed.getDate();
+            const hours = String(parsed.getHours()).padStart(2, '0');
+            const minutes = String(parsed.getMinutes()).padStart(2, '0');
+            return `更新于 ${month}月${day}日 ${hours}:${minutes}`;
+        }
+
+        function getWeatherSourceLabel(source) {
+            return source === 'amap' ? '上海预报' : '趋势参考';
+        }
+
+        function getWeatherSourceClass(source) {
+            return source === 'amap' ? 'forecast' : 'estimate';
+        }
+
+        function getParkHoursLabel(parkHours) {
+            if (!parkHours || !parkHours.includes('-')) {
+                return '常规运营时段';
+            }
+
+            const [openTime, closeTime] = parkHours.split('-');
+            if (openTime <= '08:00' && closeTime >= '22:00') {
+                return '早开园且晚间延时运营';
+            }
+            if (closeTime >= '21:30') {
+                return '晚间延时运营';
+            }
+            return '常规运营时段';
+        }
+
+        function renderWeatherOverview(days, weatherMeta = {}) {
+            if (!Array.isArray(days) || !days.length) {
+                weatherOverview.innerHTML = '';
+                return;
+            }
+
+            const averageTemp = days.reduce((sum, day) => sum + Number(day.weather.temperature_c || 0), 0) / days.length;
+            const rainiestDay = days.reduce((selected, day) => {
+                if (!selected) {
+                    return day;
+                }
+                return day.weather.rain_probability > selected.weather.rain_probability ? day : selected;
+            }, null);
+            const forecastDays = days.filter(day => day.weather.source === 'amap').length;
+
+            let weatherSummary = '本区间天气整体较平稳，可结合逐日客流安排运营与出行。';
+            if (forecastDays === days.length) {
+                weatherSummary = '本区间天气参考上海最新预报，适合直接结合客流结果制定运营安排。';
+            } else if (forecastDays > 0) {
+                weatherSummary = '近期日期参考上海最新预报，超出预报窗口的日期以季节趋势作补充。';
+            }
+
+            const weatherCards = days.map(day => `
+                <article class="weather-chip">
+                    <div class="weather-chip-head">
+                        <div class="weather-chip-date">${formatDisplayDate(day.date)} ${escapeHtml(formatShortWeekday(day.date))}</div>
+                        <span class="weather-chip-badge ${getWeatherSourceClass(day.weather.source)}">${escapeHtml(getWeatherSourceLabel(day.weather.source))}</span>
+                    </div>
+                    <div class="weather-chip-label">${escapeHtml(day.weather.weather_label)}</div>
+                    <div class="weather-chip-temp">${escapeHtml(day.weather.temperature_c)}°C</div>
+                    <div class="weather-chip-meta">降雨概率 ${Math.round(day.weather.rain_probability * 100)}%</div>
+                </article>
+            `).join('');
+
+            weatherOverview.innerHTML = `
+                <div class="weather-header">
+                    <div>
+                        <div class="panel-kicker">天气概览</div>
+                        <h3 class="weather-title">${escapeHtml(weatherMeta.city || '上海')}天气参考</h3>
+                        <p class="weather-summary">${escapeHtml(weatherSummary)}</p>
+                    </div>
+                    <div class="weather-update">${escapeHtml(formatReportTime(weatherMeta.reporttime))}</div>
+                </div>
+                <div class="weather-stat-row">
+                    <div class="weather-stat">
+                        <div class="weather-stat-label">区间平均温度</div>
+                        <div class="weather-stat-value">${averageTemp.toFixed(1)}°C</div>
+                    </div>
+                    <div class="weather-stat">
+                        <div class="weather-stat-label">最高降雨风险</div>
+                        <div class="weather-stat-value">${formatDisplayDate(rainiestDay.date)} · ${Math.round(rainiestDay.weather.rain_probability * 100)}%</div>
+                    </div>
+                    <div class="weather-stat">
+                        <div class="weather-stat-label">预报覆盖天数</div>
+                        <div class="weather-stat-value">${forecastDays} / ${days.length} 天</div>
+                    </div>
+                </div>
+                <div class="weather-strip">${weatherCards}</div>
+            `;
+        }
+
+        function renderDrivers(drivers) {
+            const driverList = document.getElementById('driverList');
+            driverList.innerHTML = '';
+            drivers.forEach(driver => {
+                const span = document.createElement('span');
+                span.className = 'driver-pill';
+                span.textContent = driver;
+                driverList.appendChild(span);
+            });
+        }
+
+        function renderList(elementId, items) {
+            const target = document.getElementById(elementId);
+            target.innerHTML = '';
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = item;
+                target.appendChild(li);
+            });
+        }
+
+        function buildTag(text) {
+            return `<span class="tag">${escapeHtml(text)}</span>`;
+        }
+
+        function renderDayCards(days) {
+            const grid = document.getElementById('dayCardGrid');
+            grid.innerHTML = '';
+
+            days.forEach(day => {
+                const card = document.createElement('article');
+                card.className = 'day-card';
+
+                const tags = [];
+
+                if (day.holiday_name) {
+                    tags.push(buildTag(day.holiday_name));
+                }
+                if (day.special_event_name) {
+                    tags.push(buildTag(day.special_event_name));
+                }
+
+                const tagMarkup = tags.length ? `<div class="day-meta-row">${tags.join('')}</div>` : '';
+
+                card.innerHTML = `
+                    <div class="day-card-head">
+                        <div>
+                            <div class="day-card-date">${day.date}</div>
+                            <div class="day-card-weekday">${day.weekday}</div>
+                        </div>
+                        <span class="crowd-pill ${day.crowd_level_en}">${day.crowd_level}</span>
+                    </div>
+                    <div class="day-attendance">
+                        ${formatCompactAttendance(day.predicted_attendance)}
+                        <small>预计客流</small>
+                    </div>
+                    <div class="day-weather-box">
+                        <div class="day-weather-top">
+                            <span class="day-weather-label">${escapeHtml(day.weather.weather_label)}</span>
+                            <span class="day-weather-source ${getWeatherSourceClass(day.weather.source)}">${escapeHtml(getWeatherSourceLabel(day.weather.source))}</span>
+                        </div>
+                        <div class="day-weather-detail">
+                            <span>${escapeHtml(day.weather.temperature_c)}°C</span>
+                            <span>降雨概率 ${Math.round(day.weather.rain_probability * 100)}%</span>
+                            <span>${escapeHtml(getParkHoursLabel(day.park_hours))}</span>
+                        </div>
+                        <div class="day-weather-time">营业时间 ${escapeHtml(day.park_hours)}</div>
+                    </div>
+                    ${tagMarkup}
+                    <p class="day-copy">${escapeHtml(day.business_note)}</p>
+                    <div class="day-foot">
+                        <div class="day-foot-item"><strong>运营关注：</strong>${escapeHtml(day.ops_focus)}</div>
+                        <div class="day-foot-item"><strong>游客建议：</strong>${escapeHtml(day.visitor_tip)}</div>
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        async function analyzeRange() {
+            if (!validateRange()) {
+                return;
+            }
+
+            setLoading(true);
+            resultsPanel.style.display = 'none';
+
+            try {
+                const response = await fetch('/analyze_range', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        start_date: startDateInput.value,
+                        end_date: endDateInput.value,
+                        enable_ai_summary: true
+                    })
+                });
+
+                const payload = await response.json();
+                if (!response.ok || !payload.success) {
+                    throw new Error(payload.error || '分析失败，请稍后重试。');
+                }
+
+                const data = payload.data;
+                renderLoadingStage(loadingStageItems.length - 1);
+                renderMetrics(data);
+                renderWeatherOverview(data.daily_predictions, data.weather_meta);
+                renderSummary(data.summary);
+                renderDrivers(data.key_drivers);
+                renderList('opsList', data.operational_recommendations);
+                renderList('visitorList', data.visitor_recommendations);
+                renderDayCards(data.daily_predictions);
+
+                resultsPanel.style.display = 'block';
+                resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (error) {
+                showError(error.message || '请求失败，请稍后重试。');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        startDateInput.addEventListener('change', () => {
+            if (!endDateInput.value || endDateInput.value < startDateInput.value) {
+                endDateInput.value = addDays(startDateInput.value, 2);
+            }
+            endDateInput.min = startDateInput.value;
+            clearError();
+        });
+
+        endDateInput.addEventListener('change', () => {
+            clearError();
+        });
+
+        analyzeButton.addEventListener('click', analyzeRange);
+
+        setDefaultRange();
+    </script>
+</body>
+</html>
